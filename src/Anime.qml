@@ -230,7 +230,12 @@ Item {
             const args = inputText.split(" ").slice(1);
             const commandObj = root.allCommands.find(cmd => cmd.name === `${command}`);
             if (commandObj) {
-                commandObj.execute(args);
+                // A command may touch shell config/state absent on other shells; degrade gracefully
+                try {
+                    commandObj.execute(args);
+                } catch (e) {
+                    Booru.addSystemMessage(Translation.tr("Command not supported here: ") + command);
+                }
             } else {
                 Booru.addSystemMessage(Translation.tr("Unknown command: ") + command);
             }
@@ -263,7 +268,9 @@ Item {
             );
 
             hist.unshift(historyEntry);
-            Persistent.states.booru.searchHistory = hist.slice(0, 13);
+            // searchHistory is ii-eve-only Persistent state; skip if the host shell lacks it
+            if ("searchHistory" in Persistent.states.booru)
+                Persistent.states.booru.searchHistory = hist.slice(0, 13);
 
             Booru.makeRequest(tagList, Persistent.states.booru.allowNsfw, Config.options.sidebar.booru.limit, pageIndex);
         }
@@ -575,7 +582,7 @@ Item {
                                 event.accepted = true
                             } else { // Accept text
                                 const inputText = tagInputField.text
-                                root.handleInput(inputText)
+                                try { root.handleInput(inputText) } catch (e) { console.warn("[Anime] handleInput failed:", e) }
                                 tagInputField.clear()
                                 event.accepted = true
                             }
