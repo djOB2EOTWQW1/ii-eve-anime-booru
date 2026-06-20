@@ -344,12 +344,14 @@ Item {
             } catch (e) {
                 newResponse.message = Booru.failMessage;
             }
-            // Append + evict old pages (keep last maxResp) and delete their cached
-            // previews — mirrors ii-eve Booru.addResponse on shells that don't evict.
+            // Mirror ii-eve Booru.addResponse exactly: append, then (in a *separate*
+            // assignment) evict from the front. Two assignments let ScriptModel emit
+            // granular add/remove ops so the ListView keeps its scroll position instead
+            // of jumping. Evicted pages' cached previews are deleted.
             const maxResp = 3;
-            let resp = [...Booru.responses, newResponse];
-            if (resp.length > maxResp) {
-                const toRemove = resp.slice(0, resp.length - maxResp);
+            Booru.responses = [...Booru.responses, newResponse];
+            if (Booru.responses.length > maxResp) {
+                const toRemove = Booru.responses.slice(0, Booru.responses.length - maxResp);
                 toRemove.forEach(r => {
                     (r.images || []).forEach(img => {
                         [img.preview_url, img.sample_url, img.file_url].forEach(u => {
@@ -360,10 +362,8 @@ Item {
                         });
                     });
                 });
-                resp = resp.slice(resp.length - maxResp);
+                Booru.responses = Booru.responses.slice(Booru.responses.length - maxResp);
             }
-            Booru.responses = resp;
-            // Reveal the freshly appended page (mirrors the Booru responseFinished handler)
             if (newResponse.provider !== "system") {
                 Qt.callLater(function() {
                     booruResponseListView.contentY = booruResponseListView.contentY + root.scrollOnNewResponse;
