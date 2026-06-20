@@ -48,20 +48,35 @@ Item {
         }
 
         function onResponseFinished() {
-            root._scrollToNewPage();
+            // ii-vynx's makeRequest appends without a page cap; enforce it here.
+            // ii-eve's own Booru already caps inside addResponse.
+            if (!("apiKeys" in Booru)) {
+                const capped = root._evictAndClean(Booru.responses);
+                if (capped.length !== Booru.responses.length) Booru.responses = capped;
+            }
         }
     }
 
-    // Land the view on the start of the page that was just appended. Positioning by
-    // index (resolved after the model has settled) is immune to front-eviction
-    // reshuffling the array, unlike adding to contentY.
-    function _scrollToNewPage() {
-        if (root.responses.length === 0) return;
-        const last = root.responses[root.responses.length - 1];
-        if (!last || last.provider === "system") return;
-        Qt.callLater(function() {
-            booruResponseListView.positionViewAtIndex(root.responses.length - 1, ListView.Beginning);
+    // One page is shown at a time; navigate with /next and /prev. A single page means
+    // there is nothing above/below to make the list jump around.
+    property int maxResponses: 1
+
+    // Keep at most maxResponses pages: drop the oldest from the front and delete their
+    // cached preview files. Returns the trimmed array (idempotent if already within cap).
+    function _evictAndClean(arr) {
+        if (arr.length <= root.maxResponses) return arr;
+        const toRemove = arr.slice(0, arr.length - root.maxResponses);
+        toRemove.forEach(r => {
+            (r.images || []).forEach(img => {
+                [img.preview_url, img.sample_url, img.file_url].forEach(u => {
+                    if (!u) return;
+                    const clean = ("" + u).split('?')[0];
+                    const fn = decodeURIComponent(clean.substring(clean.lastIndexOf('/') + 1));
+                    Quickshell.execDetached(["rm", "-f", `${root.previewDownloadPath}/${fn}`]);
+                });
+            });
         });
+        return arr.slice(arr.length - root.maxResponses);
     }
 
     property var allCommands: [
@@ -82,6 +97,16 @@ Item {
                 } else {
                     root.handleInput("");
                 }
+            }
+        },
+        {
+            name: "prev",
+            description: Translation.tr("Get the previous page of results"),
+            execute: () => {
+                if (root.responses.length === 0) return;
+                const lastResponse = root.responses[root.responses.length - 1];
+                const prevPage = Math.max(1, parseInt(lastResponse.page) - 1);
+                root.handleInput(`${lastResponse.tags.join(" ")} ${prevPage}`);
             }
         },
         {
@@ -348,27 +373,8 @@ Item {
             } catch (e) {
                 newResponse.message = Booru.failMessage;
             }
-            // Mirror ii-eve Booru.addResponse exactly: append, then (in a *separate*
-            // assignment) evict from the front. Two assignments let ScriptModel emit
-            // granular add/remove ops so the ListView keeps its scroll position instead
-            // of jumping. Evicted pages' cached previews are deleted.
-            const maxResp = 3;
-            Booru.responses = [...Booru.responses, newResponse];
-            if (Booru.responses.length > maxResp) {
-                const toRemove = Booru.responses.slice(0, Booru.responses.length - maxResp);
-                toRemove.forEach(r => {
-                    (r.images || []).forEach(img => {
-                        [img.preview_url, img.sample_url, img.file_url].forEach(u => {
-                            if (!u) return;
-                            const clean = ("" + u).split('?')[0];
-                            const fn = decodeURIComponent(clean.substring(clean.lastIndexOf('/') + 1));
-                            Quickshell.execDetached(["rm", "-f", `${root.previewDownloadPath}/${fn}`]);
-                        });
-                    });
-                });
-                Booru.responses = Booru.responses.slice(Booru.responses.length - maxResp);
-            }
-            root._scrollToNewPage();
+            // Append the new page, then cap to maxResponses (one page at a time).
+            Booru.responses = root._evictAndClean([...Booru.responses, newResponse]);
         };
         Booru.runningRequests++;
         xhr.send();
@@ -782,6 +788,53 @@ Item {
                 }
 
                 Item { Layout.fillWidth: true }
+
+                RippleButton { // Previous page
+                    implicitWidth: 34
+                    implicitHeight: 34
+                    padding: 0
+                    buttonRadius: Appearance.rounding.full
+                    colBackground: Appearance.colors.colLayer2
+                    colBackgroundHover: Appearance.colors.colLayer2Hover
+                    enabled: root.responses.length > 0
+                        && parseInt(root.responses[root.responses.length - 1].page) > 1
+                    onClicked: root.handleInput(`${root.commandPrefix}prev`)
+
+                    StyledToolTip {
+                        text: Translation.tr("Previous page")
+                    }
+
+                    contentItem: MaterialSymbol {
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        text: "navigate_before"
+                        iconSize: 20
+                        color: parent.enabled ? Appearance.colors.colOnLayer2 : Appearance.colors.colOnLayer2Disabled
+                    }
+                }
+
+                RippleButton { // Next page
+                    implicitWidth: 34
+                    implicitHeight: 34
+                    padding: 0
+                    buttonRadius: Appearance.rounding.full
+                    colBackground: Appearance.colors.colLayer2
+                    colBackgroundHover: Appearance.colors.colLayer2Hover
+                    enabled: root.responses.length > 0
+                    onClicked: root.handleInput(`${root.commandPrefix}next`)
+
+                    StyledToolTip {
+                        text: Translation.tr("Next page")
+                    }
+
+                    contentItem: MaterialSymbol {
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        text: "navigate_next"
+                        iconSize: 20
+                        color: parent.enabled ? Appearance.colors.colOnLayer2 : Appearance.colors.colOnLayer2Disabled
+                    }
+                }
 
                 RippleButton { // Clear recent searches
                     implicitWidth: 34

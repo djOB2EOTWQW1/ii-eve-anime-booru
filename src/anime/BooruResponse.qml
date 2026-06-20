@@ -269,43 +269,5 @@ Rectangle {
             }
         }
 
-        RippleButton { // Next page button
-            id: button
-            visible: root.responseData.page != "" && root.responseData.page > 0
-            Layout.fillWidth: true
-            implicitHeight: 38
-
-            onClicked: {
-                // Defer: accept() adds a response which can rebuild this list's
-                // delegates (and destroy this card) mid-handler. Capture the field
-                // and the text first, then run after the click unwinds.
-                const field = tagInputField
-                const searchText = `${responseData.tags.join(" ")} ${parseInt(root.responseData.page) + 1}`
-                Qt.callLater(() => {
-                    field.text = searchText
-                    field.accept()
-                })
-            }
-
-            buttonRadius: Appearance.rounding.normal
-            colBackground: Appearance.colors.colSurfaceContainerHighest
-            colBackgroundHover: Appearance.colors.colSurfaceContainerHighestHover
-            colRipple: Appearance.colors.colSurfaceContainerHighestActive
-
-            contentItem: RowLayout {
-                anchors.centerIn: parent
-                spacing: 4
-                StyledText {
-                    text: Translation.tr("Next page")
-                    font.weight: Font.DemiBold
-                    color: Appearance.m3colors.m3onSurface
-                }
-                MaterialSymbol {
-                    iconSize: Appearance.font.pixelSize.larger
-                    color: Appearance.m3colors.m3onSurface
-                    text: "chevron_right"
-                }
-            }
-        }
     }
 }
