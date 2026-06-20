@@ -4,10 +4,6 @@ Sidebar anime / booru image browser for the [ii-eve](https://github.com/djOB2EOT
 
 Uses the shell's `Booru` service and a few shared sidebar helper widgets that ship with ii-eve (`qs.modules.ii.sidebarPolicies`).
 
-## Closet mode
-
-Enable **"Closet — hide from sidebar tabs"** in the extension's settings to hide the Anime tab from the sidebar while keeping the page available — it stays reachable by cycling pages with Ctrl+PageDown.
-
 ## Install
 
 Extensions settings → reveal the path/URL input → paste this directory's absolute path (local) or the repo URL → Install → enable. The Anime tab appears in the left (policies) sidebar.

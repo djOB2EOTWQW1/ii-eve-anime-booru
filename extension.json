@@ -4,16 +4,6 @@
   "version": "1.0.0",
   "author": "djOB2EOTWQW1",
   "icon": "bookmark_heart",
-  "configDefaults": {
-    "hideTab": false
-  },
-  "configSchema": {
-    "hideTab": {
-      "type": "bool",
-      "label": "Closet — hide from sidebar tabs",
-      "default": false
-    }
-  },
   "contributes": {
     "sidebarLeftPages": [
       {
