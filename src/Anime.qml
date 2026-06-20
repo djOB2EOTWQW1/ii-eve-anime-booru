@@ -25,7 +25,6 @@ Item {
     property string downloadPath: Directories.booruDownloads
     property string nsfwPath: Directories.booruDownloadsNsfw
     property string commandPrefix: "/"
-    property real scrollOnNewResponse: 100
     property int tagSuggestionDelay: 210
     property var suggestionQuery: ""
     property var suggestionList: []
@@ -49,15 +48,20 @@ Item {
         }
 
         function onResponseFinished() {
-            if (root.responses.length === 0) return
-
-                var last = root.responses[root.responses.length - 1]
-                if (last && last.provider !== "system") {
-                    Qt.callLater(function() {
-                        booruResponseListView.contentY = booruResponseListView.contentY + root.scrollOnNewResponse
-                    })
-                }
+            root._scrollToNewPage();
         }
+    }
+
+    // Land the view on the start of the page that was just appended. Positioning by
+    // index (resolved after the model has settled) is immune to front-eviction
+    // reshuffling the array, unlike adding to contentY.
+    function _scrollToNewPage() {
+        if (root.responses.length === 0) return;
+        const last = root.responses[root.responses.length - 1];
+        if (!last || last.provider === "system") return;
+        Qt.callLater(function() {
+            booruResponseListView.positionViewAtIndex(root.responses.length - 1, ListView.Beginning);
+        });
     }
 
     property var allCommands: [
@@ -364,11 +368,7 @@ Item {
                 });
                 Booru.responses = Booru.responses.slice(Booru.responses.length - maxResp);
             }
-            if (newResponse.provider !== "system") {
-                Qt.callLater(function() {
-                    booruResponseListView.contentY = booruResponseListView.contentY + root.scrollOnNewResponse;
-                });
-            }
+            root._scrollToNewPage();
         };
         Booru.runningRequests++;
         xhr.send();
