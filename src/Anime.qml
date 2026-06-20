@@ -344,7 +344,31 @@ Item {
             } catch (e) {
                 newResponse.message = Booru.failMessage;
             }
-            Booru.responses = [...Booru.responses, newResponse];
+            // Append + evict old pages (keep last maxResp) and delete their cached
+            // previews — mirrors ii-eve Booru.addResponse on shells that don't evict.
+            const maxResp = 3;
+            let resp = [...Booru.responses, newResponse];
+            if (resp.length > maxResp) {
+                const toRemove = resp.slice(0, resp.length - maxResp);
+                toRemove.forEach(r => {
+                    (r.images || []).forEach(img => {
+                        [img.preview_url, img.sample_url, img.file_url].forEach(u => {
+                            if (!u) return;
+                            const clean = ("" + u).split('?')[0];
+                            const fn = decodeURIComponent(clean.substring(clean.lastIndexOf('/') + 1));
+                            Quickshell.execDetached(["rm", "-f", `${root.previewDownloadPath}/${fn}`]);
+                        });
+                    });
+                });
+                resp = resp.slice(resp.length - maxResp);
+            }
+            Booru.responses = resp;
+            // Reveal the freshly appended page (mirrors the Booru responseFinished handler)
+            if (newResponse.provider !== "system") {
+                Qt.callLater(function() {
+                    booruResponseListView.contentY = booruResponseListView.contentY + root.scrollOnNewResponse;
+                });
+            }
         };
         Booru.runningRequests++;
         xhr.send();
