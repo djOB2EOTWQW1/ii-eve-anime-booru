@@ -253,9 +253,9 @@ Item {
             }
 
             const historyEntry = { tags: tagList, page: pageIndex, provider: Booru.currentProvider };
-            let hist = Persistent.states.booru.searchHistory
-            ? Array.from(Persistent.states.booru.searchHistory)
-            : [];
+            // Search history lives in the extension's own config (portable across shells)
+            const storedHist = ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "searchHistory", []);
+            let hist = storedHist ? Array.from(storedHist) : [];
 
             hist = hist.filter(e =>
             !(e.tags.join(" ") === tagList.join(" ") &&
@@ -264,9 +264,7 @@ Item {
             );
 
             hist.unshift(historyEntry);
-            // searchHistory is ii-eve-only Persistent state; skip if the host shell lacks it
-            if ("searchHistory" in Persistent.states.booru)
-                Persistent.states.booru.searchHistory = hist.slice(0, 13);
+            ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "searchHistory", hist.slice(0, 13));
 
             Booru.makeRequest(tagList, Persistent.states.booru.allowNsfw, Config.options.sidebar.booru.limit, pageIndex);
         }
@@ -688,9 +686,9 @@ Item {
                     buttonRadius: Appearance.rounding.full
                     colBackground: Appearance.colors.colLayer2
                     colBackgroundHover: Appearance.colors.colLayer2Hover
-                    enabled: (Persistent.states.booru.searchHistory ?? []).length > 0
+                    enabled: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "searchHistory", []).length > 0
                     onClicked: {
-                        Persistent.states.booru.searchHistory = []
+                        ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "searchHistory", [])
                     }
 
                     StyledToolTip {

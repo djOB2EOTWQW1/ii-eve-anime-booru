@@ -44,7 +44,7 @@ Item {
         }
     }
 
-    readonly property var recent: Persistent.states.booru.searchHistory ?? []
+    readonly property var recent: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "searchHistory", [])
 
     ColumnLayout {
         anchors {
