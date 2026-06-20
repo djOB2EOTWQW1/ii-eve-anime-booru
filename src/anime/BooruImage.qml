@@ -66,9 +66,16 @@ Button {
         running: root.manualDownload
         filePath: root.filePath
         sourceUrl: root.resolvedPreviewUrl
-        referer: root.imageData.file_url?.includes("gelbooru.com")
-        ? `https://gelbooru.com/index.php?page=post&s=view&id=${root.imageData.id}`
-        : ""
+        // 'referer' is an ii-eve-only ImageDownloaderProcess property (gelbooru Referer
+        // header). Assign it imperatively so this component still compiles on shells
+        // whose ImageDownloaderProcess lacks it (e.g. upstream ii-vynx).
+        Component.onCompleted: {
+            if ("referer" in imageDownloader) {
+                imageDownloader.referer = Qt.binding(() => root.imageData.file_url?.includes("gelbooru.com")
+                    ? `https://gelbooru.com/index.php?page=post&s=view&id=${root.imageData.id}`
+                    : "");
+            }
+        }
         onDone: (path, width, height) => {
             imageObject.source = ""
             imageObject.source = path
@@ -214,18 +221,18 @@ Button {
 
             ImgActionButton { // Favorite
                 symbolName: "favorite"
-                visible: (root.imageData.file_url.includes("gelbooru.com") && Booru.apiKeys["gelbooru_pass_hash"]) ||
-                    (root.imageData.file_url.includes("donmai.us") && Booru.apiKeys["danbooru"] && Booru.apiKeys["danbooru_user_id"])
+                visible: (root.imageData.file_url.includes("gelbooru.com") && Booru.apiKeys?.["gelbooru_pass_hash"]) ||
+                    (root.imageData.file_url.includes("donmai.us") && Booru.apiKeys?.["danbooru"] && Booru.apiKeys?.["danbooru_user_id"])
                 onClicked: {
                     const postId = root.imageData.id;
                     if (root.imageData.file_url.includes("gelbooru.com")) {
-                        const cookieString = `user_id=${Booru.apiKeys["gelbooru_user_id"] || ""}; pass_hash=${Booru.apiKeys["gelbooru_pass_hash"] || ""}; post_threshold=0`;
+                        const cookieString = `user_id=${Booru.apiKeys?.["gelbooru_user_id"] || ""}; pass_hash=${Booru.apiKeys?.["gelbooru_pass_hash"] || ""}; post_threshold=0`;
                         Quickshell.execDetached(["bash", "-c",
                             `response=$(curl -s -H 'Referer: https://gelbooru.com/index.php?page=post&s=view&id=${postId}' -b '${cookieString}' 'https://gelbooru.com/public/addfav.php?id=${postId}'); if [ "$response" = "1" ] || [ "$response" = "3" ]; then notify-send '✅ Added to favorites' 'Post #${postId}' -a 'Shell'; else notify-send '❌ Failed to add' "Post #${postId} (response: $response)" -a 'Shell'; fi`
                         ]);
                     } else if (root.imageData.file_url.includes("donmai.us")) {
                         Quickshell.execDetached(["bash", "-c",
-                            `response=$(curl -s -X POST "https://danbooru.donmai.us/favorites.json?login=${Booru.apiKeys["danbooru_user_id"]}&api_key=${Booru.apiKeys["danbooru"]}" -d "post_id=${postId}"); if echo "$response" | grep -q '"success":true\|"post_id"' || [ "$response" != "null" ] && [ "$response" != "" ]; then notify-send '✅ Added to favorites' 'Post #${postId}' -a 'Shell'; else notify-send '❌ Failed to add' "Post #${postId} - Response: $response" -a 'Shell'; fi`
+                            `response=$(curl -s -X POST "https://danbooru.donmai.us/favorites.json?login=${Booru.apiKeys?.["danbooru_user_id"]}&api_key=${Booru.apiKeys?.["danbooru"]}" -d "post_id=${postId}"); if echo "$response" | grep -q '"success":true\|"post_id"' || [ "$response" != "null" ] && [ "$response" != "" ]; then notify-send '✅ Added to favorites' 'Post #${postId}' -a 'Shell'; else notify-send '❌ Failed to add' "Post #${postId} - Response: $response" -a 'Shell'; fi`
                         ]);
                     }
                 }

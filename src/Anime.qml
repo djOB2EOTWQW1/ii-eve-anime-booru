@@ -164,7 +164,7 @@ Item {
                     Booru.addSystemMessage(Translation.tr("Cannot reset keys for system provider"));
                     return;
                 }
-                Booru.resetApiKeys(provider);
+                Booru.resetApiKeys?.(provider);
             }
         },
         {
@@ -406,8 +406,8 @@ Item {
 
             active: (Booru.currentProvider === "gelbooru" || Booru.currentProvider === "danbooru") &&
             root.responses.length === 0 &&
-            ((Booru.currentProvider === "gelbooru" && (!Booru.apiKeys["gelbooru"] || !Booru.apiKeys["gelbooru_user_id"] || !Booru.apiKeys["gelbooru_pass_hash"])) ||
-            (Booru.currentProvider === "danbooru" && (!Booru.apiKeys["danbooru"] || !Booru.apiKeys["danbooru_user_id"])))
+            ((Booru.currentProvider === "gelbooru" && (!Booru.apiKeys?.["gelbooru"] || !Booru.apiKeys?.["gelbooru_user_id"] || !Booru.apiKeys?.["gelbooru_pass_hash"])) ||
+            (Booru.currentProvider === "danbooru" && (!Booru.apiKeys?.["danbooru"] || !Booru.apiKeys?.["danbooru_user_id"])))
 
             sourceComponent: AnimeComponents.ApiButtonsPanel {
                 responses: root.responses
