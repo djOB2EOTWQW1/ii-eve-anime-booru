@@ -48,12 +48,11 @@ Item {
         }
 
         function onResponseFinished() {
-            // ii-vynx's makeRequest appends without a page cap; enforce it here.
-            // ii-eve's own Booru already caps inside addResponse.
-            if (!("apiKeys" in Booru)) {
-                const capped = root._evictAndClean(Booru.responses);
-                if (capped.length !== Booru.responses.length) Booru.responses = capped;
-            }
+            // Enforce the single-page cap on every shell. ii-eve's own Booru keeps up to
+            // its own maxResponses (3), so trim here too — not only on shells (ii-vynx)
+            // whose makeRequest appends without any cap.
+            const capped = root._evictAndClean(Booru.responses);
+            if (capped.length !== Booru.responses.length) Booru.responses = capped;
         }
     }
 
