@@ -266,8 +266,88 @@ Item {
             hist.unshift(historyEntry);
             ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "searchHistory", hist.slice(0, 13));
 
-            Booru.makeRequest(tagList, Persistent.states.booru.allowNsfw, Config.options.sidebar.booru.limit, pageIndex);
+            const nsfwAllowed = Persistent.states.booru?.allowNsfw ?? false;
+            const reqLimit = Config.options?.sidebar?.booru?.limit ?? 20;
+            if (root._needsKeyInjection(Booru.currentProvider)) {
+                root._authMakeRequest(tagList, nsfwAllowed, reqLimit, pageIndex);
+            } else {
+                Booru.makeRequest(tagList, nsfwAllowed, reqLimit, pageIndex);
+            }
         }
+    }
+
+    // ── Authenticated booru fallback ──────────────────────────────────────────
+    // ii-eve's Booru service injects API keys into gelbooru/danbooru requests
+    // itself. On host shells that lack that (e.g. upstream ii-vynx), this extension
+    // performs the authenticated request directly — reusing the shell Booru's own
+    // response parser and response component so results display identically.
+    function _needsKeyInjection(provider) {
+        return (provider === "gelbooru" || provider === "danbooru") && !("apiKeys" in Booru);
+    }
+
+    function _authBooruUrl(tags, nsfw, limit, page) {
+        const provider = Booru.currentProvider;
+        const providerInfo = Booru.providers[provider];
+        let url = providerInfo.api;
+        let tagString = tags.join(" ");
+        if (!nsfw)
+            tagString += (provider === "gelbooru") ? " rating:general" : " rating:safe";
+        let params = [];
+        params.push("tags=" + encodeURIComponent(tagString));
+        params.push("limit=" + limit);
+        const keys = KeyringStorage.keyringData?.apiKeys ?? {};
+        if (provider === "gelbooru") {
+            params.push("pid=" + page);
+            if (keys["gelbooru"] && keys["gelbooru_user_id"]) {
+                params.push("api_key=" + keys["gelbooru"]);
+                params.push("user_id=" + keys["gelbooru_user_id"]);
+                if (keys["gelbooru_pass_hash"])
+                    params.push("pass_hash=" + keys["gelbooru_pass_hash"]);
+            }
+        } else if (provider === "danbooru") {
+            params.push("page=" + page);
+            if (keys["danbooru"] && keys["danbooru_user_id"]) {
+                params.push("api_key=" + keys["danbooru"]);
+                params.push("login=" + keys["danbooru_user_id"]);
+            }
+        }
+        url += (url.indexOf("?") === -1 ? "?" : "&") + params.join("&");
+        return url;
+    }
+
+    function _authMakeRequest(tags, nsfw, limit, page) {
+        const provider = Booru.currentProvider;
+        const providerInfo = Booru.providers[provider];
+        const url = root._authBooruUrl(tags, nsfw, limit, page);
+        const newResponse = Booru.booruResponseDataComponent.createObject(null, {
+            "provider": provider, "tags": tags, "page": page, "images": [], "message": ""
+        });
+        const xhr = new XMLHttpRequest();
+        xhr.open("GET", url);
+        if (provider === "danbooru")
+            xhr.setRequestHeader("User-Agent", "Quickshell-Booru/1.0");
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState !== XMLHttpRequest.DONE) return;
+            Booru.runningRequests--;
+            try {
+                if (xhr.status === 200) {
+                    let parsed;
+                    if (providerInfo.manualParseFunc)
+                        parsed = providerInfo.manualParseFunc(xhr.responseText);
+                    else
+                        parsed = providerInfo.mapFunc(JSON.parse(xhr.responseText));
+                    newResponse.images = parsed;
+                    newResponse.message = (parsed && parsed.length > 0) ? "" : Booru.failMessage;
+                } else {
+                    newResponse.message = Booru.failMessage;
+                }
+            } catch (e) {
+                newResponse.message = Booru.failMessage;
+            }
+            Booru.responses = [...Booru.responses, newResponse];
+        };
+        Booru.runningRequests++;
+        xhr.send();
     }
 
     onFocusChanged: (focus) => {
