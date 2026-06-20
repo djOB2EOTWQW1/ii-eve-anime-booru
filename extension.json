@@ -1,7 +1,7 @@
 {
   "name": "Anime Booru",
   "description": "Sidebar anime/booru image browser. Extracted from ii-eve as a sidebar-left extension page.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "djOB2EOTWQW1",
   "icon": "bookmark_heart",
   "contributes": {
