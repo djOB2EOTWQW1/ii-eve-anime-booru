@@ -61,21 +61,14 @@ Button {
         Qt.callLater(() => imageDownloader.running = true)
     }
 
-    ImageDownloaderProcess {
+    BooruImageDownloader {
         id: imageDownloader
         running: root.manualDownload
         filePath: root.filePath
         sourceUrl: root.resolvedPreviewUrl
-        // 'referer' is an ii-eve-only ImageDownloaderProcess property (gelbooru Referer
-        // header). Assign it imperatively so this component still compiles on shells
-        // whose ImageDownloaderProcess lacks it (e.g. upstream ii-vynx).
-        Component.onCompleted: {
-            if ("referer" in imageDownloader) {
-                imageDownloader.referer = Qt.binding(() => root.imageData.file_url?.includes("gelbooru.com")
-                    ? `https://gelbooru.com/index.php?page=post&s=view&id=${root.imageData.id}`
-                    : "");
-            }
-        }
+        referer: root.imageData.file_url?.includes("gelbooru.com")
+            ? `https://gelbooru.com/index.php?page=post&s=view&id=${root.imageData.id}`
+            : ""
         onDone: (path, width, height) => {
             imageObject.source = ""
             imageObject.source = path
