@@ -21,7 +21,7 @@ Rectangle {
     property string nsfwPath
 
     property real availableWidth: parent.width
-    property real rowTooShortThreshold: Config.options.sidebar.booru.rowTooShortThreshold
+    property real rowTooShortThreshold: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "rowTooShortThreshold", Config.options?.sidebar?.booru?.rowTooShortThreshold ?? 250)
     property real imageSpacing: 5
     property real responsePadding: 5
 

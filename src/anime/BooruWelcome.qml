@@ -156,7 +156,7 @@ Item {
             Layout.fillWidth: true
             spacing: 7
             Repeater {
-                model: Config.options.sidebar.booru.popularTags ?? []
+                model: Config.options?.sidebar?.booru?.popularTags ?? ["scenery", "1girl", "landscape", "cat", "wallpaper"]
                 delegate: ApiCommandButton {
                     required property var modelData
                     buttonText: modelData

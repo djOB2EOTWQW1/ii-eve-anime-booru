@@ -30,7 +30,7 @@ Button {
     property bool isPlayable: ["mp4", "webm", "m4v", "mov", "gif"].includes(root.fileExt)
     // Real videos can't render as a static Image, so always thumbnail them regardless of quality
     readonly property bool isStaticVideo: ["mp4", "webm", "m4v", "mov"].includes(root.fileExt)
-    readonly property string previewQuality: Config.options?.sidebar?.booru?.previewQuality ?? "preview"
+    readonly property string previewQuality: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "previewQuality", Config.options?.sidebar?.booru?.previewQuality ?? "preview")
     readonly property string resolvedPreviewUrl: {
         if (root.isStaticVideo)
             return imageData.preview_url ?? imageData.sample_url ?? imageData.file_url
@@ -175,7 +175,7 @@ Button {
                 visible: root.isPlayable
                 onClicked: {
                     // gelbooru needs a Referer header the native player can't send → force mpv
-                    const useNative = (Config.options?.sidebar?.booru?.player ?? "mpv") === "native"
+                    const useNative = ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "player", Config.options?.sidebar?.booru?.player ?? "mpv") === "native"
                         && !root.imageData.file_url.includes("gelbooru.com")
                     if (useNative) {
                         root.nativePlaying = true
@@ -221,18 +221,18 @@ Button {
 
             ImgActionButton { // Favorite
                 symbolName: "favorite"
-                visible: (root.imageData.file_url.includes("gelbooru.com") && Booru.apiKeys?.["gelbooru_pass_hash"]) ||
-                    (root.imageData.file_url.includes("donmai.us") && Booru.apiKeys?.["danbooru"] && Booru.apiKeys?.["danbooru_user_id"])
+                visible: (root.imageData.file_url.includes("gelbooru.com") && KeyringStorage.keyringData?.apiKeys?.["gelbooru_pass_hash"]) ||
+                    (root.imageData.file_url.includes("donmai.us") && KeyringStorage.keyringData?.apiKeys?.["danbooru"] && KeyringStorage.keyringData?.apiKeys?.["danbooru_user_id"])
                 onClicked: {
                     const postId = root.imageData.id;
                     if (root.imageData.file_url.includes("gelbooru.com")) {
-                        const cookieString = `user_id=${Booru.apiKeys?.["gelbooru_user_id"] || ""}; pass_hash=${Booru.apiKeys?.["gelbooru_pass_hash"] || ""}; post_threshold=0`;
+                        const cookieString = `user_id=${KeyringStorage.keyringData?.apiKeys?.["gelbooru_user_id"] || ""}; pass_hash=${KeyringStorage.keyringData?.apiKeys?.["gelbooru_pass_hash"] || ""}; post_threshold=0`;
                         Quickshell.execDetached(["bash", "-c",
                             `response=$(curl -s -H 'Referer: https://gelbooru.com/index.php?page=post&s=view&id=${postId}' -b '${cookieString}' 'https://gelbooru.com/public/addfav.php?id=${postId}'); if [ "$response" = "1" ] || [ "$response" = "3" ]; then notify-send '✅ Added to favorites' 'Post #${postId}' -a 'Shell'; else notify-send '❌ Failed to add' "Post #${postId} (response: $response)" -a 'Shell'; fi`
                         ]);
                     } else if (root.imageData.file_url.includes("donmai.us")) {
                         Quickshell.execDetached(["bash", "-c",
-                            `response=$(curl -s -X POST "https://danbooru.donmai.us/favorites.json?login=${Booru.apiKeys?.["danbooru_user_id"]}&api_key=${Booru.apiKeys?.["danbooru"]}" -d "post_id=${postId}"); if echo "$response" | grep -q '"success":true\|"post_id"' || [ "$response" != "null" ] && [ "$response" != "" ]; then notify-send '✅ Added to favorites' 'Post #${postId}' -a 'Shell'; else notify-send '❌ Failed to add' "Post #${postId} - Response: $response" -a 'Shell'; fi`
+                            `response=$(curl -s -X POST "https://danbooru.donmai.us/favorites.json?login=${KeyringStorage.keyringData?.apiKeys?.["danbooru_user_id"]}&api_key=${KeyringStorage.keyringData?.apiKeys?.["danbooru"]}" -d "post_id=${postId}"); if echo "$response" | grep -q '"success":true\|"post_id"' || [ "$response" != "null" ] && [ "$response" != "" ]; then notify-send '✅ Added to favorites' 'Post #${postId}' -a 'Shell'; else notify-send '❌ Failed to add' "Post #${postId} - Response: $response" -a 'Shell'; fi`
                         ]);
                     }
                 }

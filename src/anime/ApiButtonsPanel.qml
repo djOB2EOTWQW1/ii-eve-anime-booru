@@ -33,17 +33,17 @@ Item {
             property var options: {
                 var opts = []
                 if (Booru.currentProvider === "gelbooru") {
-                    if (!Booru.apiKeys?.["gelbooru"])
+                    if (!KeyringStorage.keyringData?.apiKeys?.["gelbooru"])
                         opts.push({ displayName: "API Key", icon: "key", value: "gelbooru_key" })
-                        if (!Booru.apiKeys?.["gelbooru_user_id"])
+                        if (!KeyringStorage.keyringData?.apiKeys?.["gelbooru_user_id"])
                             opts.push({ displayName: "User ID", icon: "person", value: "gelbooru_id" })
-                            if (!Booru.apiKeys?.["gelbooru_pass_hash"])
+                            if (!KeyringStorage.keyringData?.apiKeys?.["gelbooru_pass_hash"])
                                 opts.push({ displayName: "Pass Hash", icon: "password", value: "gelbooru_pass_hash" })
                 }
                 else if (Booru.currentProvider === "danbooru") {
-                    if (!Booru.apiKeys?.["danbooru"])
+                    if (!KeyringStorage.keyringData?.apiKeys?.["danbooru"])
                         opts.push({ displayName: "API Key", icon: "key", value: "danbooru_key" })
-                        if (!Booru.apiKeys?.["danbooru_user_id"])
+                        if (!KeyringStorage.keyringData?.apiKeys?.["danbooru_user_id"])
                             opts.push({ displayName: "Login", icon: "person", value: "danbooru_login" })
                 }
                 return opts

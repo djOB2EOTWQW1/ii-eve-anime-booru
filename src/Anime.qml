@@ -127,7 +127,7 @@ Item {
             execute: args => {
                 if (args.length === 0 || args[0] === "") {
                     Booru.addSystemMessage(
-                        Translation.tr("Current thumbnail: %1").arg(Config.options.sidebar.booru.rowTooShortThreshold)
+                        Translation.tr("Current thumbnail: %1").arg(ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "rowTooShortThreshold", Config.options?.sidebar?.booru?.rowTooShortThreshold ?? 250))
                     );
                     return;
                 }
@@ -141,14 +141,7 @@ Item {
                     return;
                 }
 
-                Config.options.sidebar.booru.rowTooShortThreshold = value;
-
-                for (let i = 0; i < booruResponseListView.count; i++) {
-                    const item = booruResponseListView.itemAtIndex(i);
-                    if (item && item.responseData.provider !== "system") {
-                        item.rowTooShortThreshold = value;
-                    }
-                }
+                ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "rowTooShortThreshold", value);
 
                 Booru.addSystemMessage(
                     Translation.tr("Thumbnail set to %1").arg(value)
@@ -164,7 +157,10 @@ Item {
                     Booru.addSystemMessage(Translation.tr("Cannot reset keys for system provider"));
                     return;
                 }
-                Booru.resetApiKeys?.(provider);
+                KeyringStorage.setNestedField(["apiKeys", provider], undefined);
+                KeyringStorage.setNestedField(["apiKeys", provider + "_user_id"], undefined);
+                KeyringStorage.setNestedField(["apiKeys", provider + "_pass_hash"], undefined);
+                Booru.addSystemMessage(Translation.tr("API keys reset for %1").arg(Booru.providers[provider]?.name ?? provider));
             }
         },
         {
@@ -173,7 +169,7 @@ Item {
             execute: args => {
                 if (args.length === 0 || args[0] === "") {
                     Booru.addSystemMessage(
-                        Translation.tr("Current preview quality: %1").arg(Config.options.sidebar.booru.previewQuality)
+                        Translation.tr("Current preview quality: %1").arg(ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "previewQuality", Config.options?.sidebar?.booru?.previewQuality ?? "preview"))
                     );
                     return;
                 }
@@ -187,7 +183,7 @@ Item {
                     return;
                 }
 
-                Config.options.sidebar.booru.previewQuality = value;
+                ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "previewQuality", value);
 
                 Booru.addSystemMessage(
                     Translation.tr("Preview quality set to %1").arg(value)
@@ -200,7 +196,7 @@ Item {
             execute: args => {
                 if (args.length === 0 || args[0] === "") {
                     Booru.addSystemMessage(
-                        Translation.tr("Current player: %1").arg(Config.options.sidebar.booru.player)
+                        Translation.tr("Current player: %1").arg(ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "player", Config.options?.sidebar?.booru?.player ?? "mpv"))
                     );
                     return;
                 }
@@ -214,7 +210,7 @@ Item {
                     return;
                 }
 
-                Config.options.sidebar.booru.player = value;
+                ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "player", value);
 
                 Booru.addSystemMessage(
                     Translation.tr("Player set to %1").arg(value)
@@ -413,8 +409,8 @@ Item {
 
             active: (Booru.currentProvider === "gelbooru" || Booru.currentProvider === "danbooru") &&
             root.responses.length === 0 &&
-            ((Booru.currentProvider === "gelbooru" && (!Booru.apiKeys?.["gelbooru"] || !Booru.apiKeys?.["gelbooru_user_id"] || !Booru.apiKeys?.["gelbooru_pass_hash"])) ||
-            (Booru.currentProvider === "danbooru" && (!Booru.apiKeys?.["danbooru"] || !Booru.apiKeys?.["danbooru_user_id"])))
+            ((Booru.currentProvider === "gelbooru" && (!KeyringStorage.keyringData?.apiKeys?.["gelbooru"] || !KeyringStorage.keyringData?.apiKeys?.["gelbooru_user_id"] || !KeyringStorage.keyringData?.apiKeys?.["gelbooru_pass_hash"])) ||
+            (Booru.currentProvider === "danbooru" && (!KeyringStorage.keyringData?.apiKeys?.["danbooru"] || !KeyringStorage.keyringData?.apiKeys?.["danbooru_user_id"])))
 
             sourceComponent: AnimeComponents.ApiButtonsPanel {
                 responses: root.responses

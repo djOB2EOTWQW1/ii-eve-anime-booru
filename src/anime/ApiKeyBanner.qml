@@ -65,7 +65,8 @@ Item {
                     DialogButton {
                         buttonText: Translation.tr("Don't show again")
                         onClicked: {
-                            Persistent.states.booru.apiKeyBannerDismissed = true
+                            if ("apiKeyBannerDismissed" in Persistent.states.booru)
+                                Persistent.states.booru.apiKeyBannerDismissed = true
                         }
                     }
                 }
