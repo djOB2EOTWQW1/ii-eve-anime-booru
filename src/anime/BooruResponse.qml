@@ -62,7 +62,6 @@ Rectangle {
         Qt.callLater(() => prefetch.running = true);
     }
 
-    Component.onCompleted: root.startPrefetch()
     onPreviewQualityChanged: root.startPrefetch()
 
     BooruPagePrefetch {
@@ -86,6 +85,7 @@ Rectangle {
     Component.onCompleted: {
         // Break property bind to prevent aggressive updates
         availableWidth = parent.width
+        root.startPrefetch()
     }
 
     Connections {

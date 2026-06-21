@@ -189,8 +189,10 @@ Button {
 
             ImgActionButton { // Favorite
                 symbolName: "favorite"
-                visible: (root.imageData.file_url.includes("gelbooru.com") && KeyringStorage.keyringData?.apiKeys?.["gelbooru_pass_hash"]) ||
-                    (root.imageData.file_url.includes("donmai.us") && KeyringStorage.keyringData?.apiKeys?.["danbooru"] && KeyringStorage.keyringData?.apiKeys?.["danbooru_user_id"])
+                // Boolean() guards against an undefined result, which QML can't assign to
+                // bool and would silently leave visible at its default (true).
+                visible: Boolean((root.imageData.file_url?.includes("gelbooru.com") && KeyringStorage.keyringData?.apiKeys?.["gelbooru_pass_hash"]) ||
+                    (root.imageData.file_url?.includes("donmai.us") && KeyringStorage.keyringData?.apiKeys?.["danbooru"] && KeyringStorage.keyringData?.apiKeys?.["danbooru_user_id"]))
                 onClicked: {
                     const postId = root.imageData.id;
                     if (root.imageData.file_url.includes("gelbooru.com")) {
@@ -199,8 +201,14 @@ Button {
                             `response=$(curl -s -H 'Referer: https://gelbooru.com/index.php?page=post&s=view&id=${postId}' -b '${cookieString}' 'https://gelbooru.com/public/addfav.php?id=${postId}'); if [ "$response" = "1" ] || [ "$response" = "3" ]; then notify-send '✅ Added to favorites' 'Post #${postId}' -a 'Shell'; else notify-send '❌ Failed to add' "Post #${postId} (response: $response)" -a 'Shell'; fi`
                         ]);
                     } else if (root.imageData.file_url.includes("donmai.us")) {
+                        const login = KeyringStorage.keyringData?.apiKeys?.["danbooru_user_id"];
+                        const apiKey = KeyringStorage.keyringData?.apiKeys?.["danbooru"];
+                        if (!login || !apiKey) {
+                            Quickshell.execDetached(["notify-send", "❌ Failed to add", `Post #${postId} (no Danbooru API key)`, "-a", "Shell"]);
+                            return;
+                        }
                         Quickshell.execDetached(["bash", "-c",
-                            `response=$(curl -s -X POST "https://danbooru.donmai.us/favorites.json?login=${KeyringStorage.keyringData?.apiKeys?.["danbooru_user_id"]}&api_key=${KeyringStorage.keyringData?.apiKeys?.["danbooru"]}" -d "post_id=${postId}"); if echo "$response" | grep -q '"success":true\|"post_id"' || [ "$response" != "null" ] && [ "$response" != "" ]; then notify-send '✅ Added to favorites' 'Post #${postId}' -a 'Shell'; else notify-send '❌ Failed to add' "Post #${postId} - Response: $response" -a 'Shell'; fi`
+                            `code=$(curl -s -o /dev/null -w '%{http_code}' -A 'Quickshell-Booru/1.0' -X POST "https://danbooru.donmai.us/favorites.json?login=${login}&api_key=${apiKey}" -d "post_id=${postId}"); case "$code" in 200|201) notify-send '✅ Added to favorites' 'Post #${postId}' -a 'Shell';; 422) notify-send 'Already in favorites' 'Post #${postId}' -a 'Shell';; *) notify-send '❌ Failed to add' "Post #${postId} (HTTP $code)" -a 'Shell';; esac`
                         ]);
                     }
                 }
