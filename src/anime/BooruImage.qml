@@ -1,15 +1,12 @@
 import qs.services
 import qs.modules.common
 import qs.modules.common.functions
-import qs.modules.common.utils
 import qs.modules.common.widgets
-import QtQml
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
-import Quickshell.Io
 import Quickshell.Hyprland
 
 Button {
@@ -20,7 +17,10 @@ Button {
     property string previewDownloadPath
     property string downloadPath
     property string nsfwPath
-    property string fileName: decodeURIComponent((imageData.file_url).substring((imageData.file_url).lastIndexOf('/') + 1))
+    property string fileName: {
+        const url = imageData.file_url ?? ""
+        return decodeURIComponent(url.substring(url.lastIndexOf('/') + 1))
+    }
     property string fileExt: {
         const ext = (imageData.file_ext ?? "").toLowerCase().replace(/^\./, "")
         if (ext) return ext

@@ -2,13 +2,11 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 import qs.modules.ii.sidebarPolicies
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Hyprland
 import Qt5Compat.GraphicalEffects
 
 Rectangle {
@@ -199,7 +197,6 @@ Rectangle {
                 Layout.alignment: Qt.AlignBottom
 
                 Repeater {
-                    id: tagRepeater
                     model: root.responseData.tags
 
                     ApiCommandButton {
@@ -217,7 +214,6 @@ Rectangle {
         }
 
         StyledText { // Message
-            id: messageText
             Layout.fillWidth: true
             visible: root.responseData.message.length > 0
             font.pixelSize: Appearance.font.pixelSize.small

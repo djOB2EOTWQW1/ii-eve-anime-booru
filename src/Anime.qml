@@ -2,9 +2,7 @@ import qs
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
-import qs.modules.common.functions
 import qs.modules.ii.sidebarPolicies
-import "anime"
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -267,7 +265,7 @@ Item {
                 Booru.addSystemMessage(Translation.tr("Unknown command: ") + command);
             }
         }
-        else if (inputText.trim() == "+") {
+        else if (inputText.trim() === "+") {
             root.handleInput(`${root.commandPrefix}next`);
         }
         else {
@@ -383,8 +381,8 @@ Item {
         xhr.send();
     }
 
-    onFocusChanged: (focus) => {
-        if (focus && !keyInputDialogLoader.active) {
+    onFocusChanged: (focused) => {
+        if (focused && !keyInputDialogLoader.active) {
             tagInputField.forceActiveFocus()
         }
     }
@@ -392,7 +390,7 @@ Item {
     property real pageKeyScrollAmount: booruResponseListView.height / 2
     Keys.onPressed: (event) => {
         if (keyInputDialogLoader.active) return
-            tagInputField.forceActiveFocus()
+        tagInputField.forceActiveFocus()
         if (event.modifiers === Qt.NoModifier) {
             if (event.key === Qt.Key_PageUp) {
                 if (booruResponseListView.atYBeginning) return;
@@ -419,14 +417,15 @@ Item {
         spacing: root.padding
 
         Item {
+            id: listContainer
             Layout.fillWidth: true
             Layout.fillHeight: true
 
             layer.enabled: true
             layer.effect: OpacityMask {
                 maskSource: Rectangle {
-                    width: swipeView.width
-                    height: swipeView.height
+                    width: listContainer.width
+                    height: listContainer.height
                     radius: Appearance.rounding.small
                 }
             }
@@ -449,7 +448,7 @@ Item {
                 model: ScriptModel {
                     values: root.responses
                 }
-                delegate: BooruResponse {
+                delegate: AnimeComponents.BooruResponse {
                     responseData: modelData
                     tagInputField: root.inputField
                     previewDownloadPath: root.previewDownloadPath
@@ -485,7 +484,6 @@ Item {
             }
 
             MaterialLoadingIndicator {
-                id: loadingIndicator
                 z: 4
                 anchors {
                     horizontalCenter: parent.horizontalCenter
@@ -535,15 +533,14 @@ Item {
             id: tagSuggestions
             visible: root.suggestionList.length > 0 && tagInputField.text.length > 0
             property int selectedIndex: 0
+            property var suggestions: root.suggestionList.slice(0, 10)
+            onSuggestionsChanged: selectedIndex = 0
             Layout.fillWidth: true
             spacing: 5
 
             Repeater {
                 id: tagSuggestionRepeater
-                model: {
-                    tagSuggestions.selectedIndex = 0
-                    return root.suggestionList.slice(0, 10)
-                }
+                model: tagSuggestions.suggestions
                 delegate: ApiCommandButton {
                     id: tagButton
                     colBackground: tagSuggestions.selectedIndex === index ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colSecondaryContainer
@@ -740,9 +737,8 @@ Item {
                 ApiInputBoxIndicator { // Tool indicator
                     icon: "api"
                     text: Booru.providers[Booru.currentProvider].name
-                    tooltipText: Translation.tr("Current API endpoint: %1\nSet it with %2mode PROVIDER")
+                    tooltipText: Translation.tr("Current API endpoint: %1")
                         .arg(Booru.providers[Booru.currentProvider].url)
-                        .arg(root.commandPrefix)
                 }
 
                 MouseArea { // NSFW toggle
