@@ -51,8 +51,9 @@ Item {
             // Enforce the single-page cap on every shell. ii-eve's own Booru keeps up to
             // its own maxResponses (3), so trim here too — not only on shells (ii-vynx)
             // whose makeRequest appends without any cap.
-            const capped = root._evictAndClean(Booru.responses);
+            const capped = root._capResponses(Booru.responses);
             if (capped.length !== Booru.responses.length) Booru.responses = capped;
+            diskTrimTimer.restart();
         }
     }
 
@@ -60,22 +61,24 @@ Item {
     // there is nothing above/below to make the list jump around.
     property int maxResponses: 1
 
-    // Keep at most maxResponses pages: drop the oldest from the front and delete their
-    // cached preview files. Returns the trimmed array (idempotent if already within cap).
-    function _evictAndClean(arr) {
+    // Cap the in-memory response list. Preview files are NOT deleted here: keeping them on
+    // disk makes /prev (and revisited pages) instant, since the prefetch reuses cached files.
+    // The directory is bounded separately by _trimDiskCache (LRU by mtime).
+    function _capResponses(arr) {
         if (arr.length <= root.maxResponses) return arr;
-        const toRemove = arr.slice(0, arr.length - root.maxResponses);
-        toRemove.forEach(r => {
-            (r.images || []).forEach(img => {
-                [img.preview_url, img.sample_url, img.file_url].forEach(u => {
-                    if (!u) return;
-                    const clean = ("" + u).split('?')[0];
-                    const fn = decodeURIComponent(clean.substring(clean.lastIndexOf('/') + 1));
-                    Quickshell.execDetached(["rm", "-f", `${root.previewDownloadPath}/${fn}`]);
-                });
-            });
-        });
         return arr.slice(arr.length - root.maxResponses);
+    }
+
+    // Keep the preview cache bounded: drop all but the newest files (by mtime).
+    property int diskCacheKeep: 400
+    function _trimDiskCache() {
+        Quickshell.execDetached(["bash", "-c",
+            `cd '${root.previewDownloadPath}' 2>/dev/null && ls -1t 2>/dev/null | tail -n +${root.diskCacheKeep + 1} | tr '\\n' '\\0' | xargs -0 -r rm -f`]);
+    }
+    Timer {
+        id: diskTrimTimer
+        interval: 1500
+        onTriggered: root._trimDiskCache()
     }
 
     property var allCommands: [
@@ -373,7 +376,8 @@ Item {
                 newResponse.message = Booru.failMessage;
             }
             // Append the new page, then cap to maxResponses (one page at a time).
-            Booru.responses = root._evictAndClean([...Booru.responses, newResponse]);
+            Booru.responses = root._capResponses([...Booru.responses, newResponse]);
+            diskTrimTimer.restart();
         };
         Booru.runningRequests++;
         xhr.send();

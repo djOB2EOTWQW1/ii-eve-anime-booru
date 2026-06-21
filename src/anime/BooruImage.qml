@@ -45,6 +45,8 @@ Button {
         return decodeURIComponent(url.substring(url.lastIndexOf('/') + 1))
     }
     property string filePath: `${root.previewDownloadPath}/${root.previewCacheName}`
+    // Set by the parent response once its page-level prefetch has finished.
+    property bool previewsReady: false
     property bool nativePlaying: false
     property int maxTagStringLineLength: 50
     property real imageRadius: Appearance.rounding.small
@@ -52,33 +54,6 @@ Button {
 
     property bool showActions: false
     property bool showTags: false
-    property bool ready: false
-    Component.onCompleted: root.ready = true
-    onResolvedPreviewUrlChanged: {
-        if (!root.ready || !root.manualDownload) return
-        // Process won't re-run on a command change; toggle running to refetch at the new quality
-        imageDownloader.running = false
-        Qt.callLater(() => imageDownloader.running = true)
-    }
-
-    BooruImageDownloader {
-        id: imageDownloader
-        running: root.manualDownload
-        filePath: root.filePath
-        sourceUrl: root.resolvedPreviewUrl
-        referer: root.imageData.file_url?.includes("gelbooru.com")
-            ? `https://gelbooru.com/index.php?page=post&s=view&id=${root.imageData.id}`
-            : ""
-        onDone: (path, width, height) => {
-            imageObject.source = ""
-            imageObject.source = path
-            if (!modelData.width || !modelData.height) {
-                modelData.width = width
-                modelData.height = height
-                modelData.aspect_ratio = width / height
-            }
-        }
-    }
 
     padding: 0
     implicitWidth: root.rowHeight * modelData.aspect_ratio
@@ -100,7 +75,7 @@ Button {
             width: root.rowHeight * modelData.aspect_ratio
             height: root.rowHeight
             fillMode: Image.PreserveAspectFit
-            source: root.manualDownload ? "" : root.resolvedPreviewUrl
+            source: root.manualDownload ? (root.previewsReady ? root.filePath : "") : root.resolvedPreviewUrl
 
             layer.enabled: true
             layer.effect: OpacityMask {

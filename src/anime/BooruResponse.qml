@@ -25,6 +25,54 @@ Rectangle {
     property real imageSpacing: 5
     property real responsePadding: 5
 
+    // Previews that need a curl fetch (Referer/UA) instead of a direct Image load.
+    readonly property var manualDownloadProviders: ["danbooru", "waifu.im", "t.alcy.cc", "konachan", "gelbooru"]
+    readonly property bool manualDownload: manualDownloadProviders.includes(root.responseData.provider)
+    // Gelbooru hotlink protection: any gelbooru.com referer works (no need for the post id).
+    readonly property string previewReferer: root.responseData.provider === "gelbooru" ? "https://gelbooru.com/" : ""
+    readonly property string previewQuality: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "previewQuality", Config.options?.sidebar?.booru?.previewQuality ?? "preview")
+    property bool previewsReady: !root.manualDownload
+
+    function _previewExt(img) {
+        const e = (img.file_ext ?? "").toLowerCase().replace(/^\./, "");
+        if (e) return e;
+        const u = (img.file_url ?? "").split("?")[0];
+        return u.substring(u.lastIndexOf(".") + 1).toLowerCase();
+    }
+    // Mirror of BooruImage's quality resolution so prefetch paths match what it displays.
+    function _resolvePreview(img) {
+        const isStaticVideo = ["mp4", "webm", "m4v", "mov"].includes(root._previewExt(img));
+        let url;
+        if (isStaticVideo) url = img.preview_url ?? img.sample_url ?? img.file_url;
+        else if (root.previewQuality === "full") url = img.file_url ?? img.sample_url ?? img.preview_url;
+        else if (root.previewQuality === "sample") url = img.sample_url ?? img.file_url ?? img.preview_url;
+        else url = img.preview_url ?? img.sample_url ?? img.file_url;
+        const clean = (url ?? "").split("?")[0];
+        const name = decodeURIComponent(clean.substring(clean.lastIndexOf("/") + 1));
+        return { "url": url, "path": `${root.previewDownloadPath}/${name}` };
+    }
+    function _buildEntries() {
+        if (!root.manualDownload) return [];
+        return (root.responseData.images || []).map(img => root._resolvePreview(img)).filter(e => e.url);
+    }
+    function startPrefetch() {
+        if (!root.manualDownload) return;
+        root.previewsReady = false;
+        prefetch.running = false;
+        Qt.callLater(() => prefetch.running = true);
+    }
+
+    Component.onCompleted: root.startPrefetch()
+    onPreviewQualityChanged: root.startPrefetch()
+
+    BooruPagePrefetch {
+        id: prefetch
+        entries: root._buildEntries()
+        dir: root.previewDownloadPath
+        referer: root.previewReferer
+        onFinished: root.previewsReady = true
+    }
+
     readonly property var providerIcons: ({
         "yandere": "image", "konachan": "wallpaper", "zerochan": "child_care",
         "danbooru": "photo_library", "gelbooru": "collections",
@@ -258,8 +306,9 @@ Rectangle {
                         imageData: modelData
                         rowHeight: imageRow.rowHeight
                         imageRadius: imageRow.modelData.images.length == 1 ? 50 : Appearance.rounding.normal
-                        // Download manually to reduce redundant requests or make sure downloading works
-                        manualDownload: ["danbooru", "waifu.im", "t.alcy.cc", "konachan", "gelbooru"].includes(root.responseData.provider)
+                        // Previews are prefetched at the page level (one curl), not per image.
+                        manualDownload: root.manualDownload
+                        previewsReady: root.previewsReady
                         previewDownloadPath: root.previewDownloadPath
                         downloadPath: root.downloadPath
                         nsfwPath: root.nsfwPath
