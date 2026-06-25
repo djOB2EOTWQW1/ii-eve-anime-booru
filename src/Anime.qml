@@ -8,6 +8,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
 import Quickshell
+import Quickshell.Io
 
 // Anime loaders components
 import "anime" as AnimeComponents
@@ -16,6 +17,42 @@ Item {
     id: root
     anchors.fill: parent
     property real padding: 4
+
+    // Settings + search history live in our OWN state file — NOT via
+    // ExtensionManager.setExtensionConfig. Mutating extensionConfigs fires
+    // ExtensionManager.refreshExtensions(), which makes the host rebuild the sidebar
+    // SwipeView page (see SidebarPoliciesContent: it reloads each page with a
+    // "?_t=Date.now()" cache-buster). That rebuild is what made the panel flicker on
+    // every search and drop keyboard focus after settings commands. A private file
+    // avoids the side-effect entirely. Child components read these reactively via the
+    // `settings` object threaded down to them. Reads are portable across host shells.
+    property alias settings: stateAdapter
+    FileView {
+        id: stateFile
+        path: `${Directories.state}/ii-eve-anime-booru.json`
+        watchChanges: false
+        onLoadFailed: (error) => {
+            if (error !== FileViewError.FileNotFound) return
+            // One-time migration: seed from the old ExtensionManager-backed config so
+            // upgrading users keep their quality/player/history. Reads don't trigger
+            // refreshExtensions; only writes did, which is why we stop writing there.
+            const m = (k, d) => ExtensionManager.getExtensionConfig("ii-eve-anime-booru", k, d)
+            stateAdapter.previewQuality = m("previewQuality", stateAdapter.previewQuality)
+            stateAdapter.player = m("player", stateAdapter.player)
+            stateAdapter.rowTooShortThreshold = m("rowTooShortThreshold", stateAdapter.rowTooShortThreshold)
+            const h = m("searchHistory", [])
+            if (h && h.length) stateAdapter.searchHistory = Array.from(h)
+            stateFile.writeAdapter()
+        }
+        JsonAdapter {
+            id: stateAdapter
+            property string previewQuality: Config.options?.sidebar?.booru?.previewQuality ?? "preview"
+            property string player: Config.options?.sidebar?.booru?.player ?? "mpv"
+            property int rowTooShortThreshold: Config.options?.sidebar?.booru?.rowTooShortThreshold ?? 250
+            property var searchHistory: []
+        }
+    }
+    function _saveSettings() { stateFile.writeAdapter() }
 
     property var inputField: tagInputField
     readonly property var responses: Booru.responses
@@ -52,6 +89,9 @@ Item {
             const capped = root._capResponses(Booru.responses);
             if (capped.length !== Booru.responses.length) Booru.responses = capped;
             diskTrimTimer.restart();
+            // A new page replaces the old one (single-page view) — scroll back to the
+            // top so /next and /prev don't leave you stranded at the bottom.
+            Qt.callLater(() => booruResponseListView.positionViewAtBeginning());
         }
     }
 
@@ -78,6 +118,10 @@ Item {
         interval: 1500
         onTriggered: root._trimDiskCache()
     }
+
+    // Caps how many preview downloads run at once across all tiles/pages. The bound
+    // is what makes a provider rate-limit (e.g. gelbooru) impossible. Tunable via the
+    // extension's own config so it survives across host shells.
 
     property var allCommands: [
         {
@@ -156,7 +200,7 @@ Item {
             execute: args => {
                 if (args.length === 0 || args[0] === "") {
                     Booru.addSystemMessage(
-                        Translation.tr("Current thumbnail: %1").arg(ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "rowTooShortThreshold", Config.options?.sidebar?.booru?.rowTooShortThreshold ?? 250))
+                        Translation.tr("Current thumbnail: %1").arg(stateAdapter.rowTooShortThreshold)
                     );
                     return;
                 }
@@ -170,7 +214,8 @@ Item {
                     return;
                 }
 
-                ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "rowTooShortThreshold", value);
+                stateAdapter.rowTooShortThreshold = value;
+                root._saveSettings();
 
                 Booru.addSystemMessage(
                     Translation.tr("Thumbnail set to %1").arg(value)
@@ -198,7 +243,7 @@ Item {
             execute: args => {
                 if (args.length === 0 || args[0] === "") {
                     Booru.addSystemMessage(
-                        Translation.tr("Current preview quality: %1").arg(ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "previewQuality", Config.options?.sidebar?.booru?.previewQuality ?? "preview"))
+                        Translation.tr("Current preview quality: %1").arg(stateAdapter.previewQuality)
                     );
                     return;
                 }
@@ -212,7 +257,8 @@ Item {
                     return;
                 }
 
-                ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "previewQuality", value);
+                stateAdapter.previewQuality = value;
+                root._saveSettings();
 
                 Booru.addSystemMessage(
                     Translation.tr("Preview quality set to %1").arg(value)
@@ -225,7 +271,7 @@ Item {
             execute: args => {
                 if (args.length === 0 || args[0] === "") {
                     Booru.addSystemMessage(
-                        Translation.tr("Current player: %1").arg(ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "player", Config.options?.sidebar?.booru?.player ?? "mpv"))
+                        Translation.tr("Current player: %1").arg(stateAdapter.player)
                     );
                     return;
                 }
@@ -239,7 +285,8 @@ Item {
                     return;
                 }
 
-                ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "player", value);
+                stateAdapter.player = value;
+                root._saveSettings();
 
                 Booru.addSystemMessage(
                     Translation.tr("Player set to %1").arg(value)
@@ -283,7 +330,7 @@ Item {
 
             const historyEntry = { tags: tagList, page: pageIndex, provider: Booru.currentProvider };
             // Search history lives in the extension's own config (portable across shells)
-            const storedHist = ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "searchHistory", []);
+            const storedHist = stateAdapter.searchHistory;
             let hist = storedHist ? Array.from(storedHist) : [];
 
             hist = hist.filter(e =>
@@ -293,7 +340,8 @@ Item {
             );
 
             hist.unshift(historyEntry);
-            ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "searchHistory", hist.slice(0, 13));
+            stateAdapter.searchHistory = hist.slice(0, 13);
+            root._saveSettings();
 
             const nsfwAllowed = Persistent.states.booru?.allowNsfw ?? false;
             const reqLimit = Config.options?.sidebar?.booru?.limit ?? 20;
@@ -376,6 +424,7 @@ Item {
             // Append the new page, then cap to maxResponses (one page at a time).
             Booru.responses = root._capResponses([...Booru.responses, newResponse]);
             diskTrimTimer.restart();
+            Qt.callLater(() => booruResponseListView.positionViewAtBeginning());
         };
         Booru.runningRequests++;
         xhr.send();
@@ -385,6 +434,14 @@ Item {
         if (focused && !keyInputDialogLoader.active) {
             tagInputField.forceActiveFocus()
         }
+    }
+
+    // The host recreates this page (fresh QML object) whenever ExtensionManager fires
+    // refreshExtensions — including a few times during shell startup. A recreated page
+    // starts without keyboard focus, which is why the very first launch needed a click
+    // before typing or panel shortcuts worked. Grab focus as soon as the page exists.
+    Component.onCompleted: {
+        if (!keyInputDialogLoader.active) tagInputField.forceActiveFocus()
     }
 
     property real pageKeyScrollAmount: booruResponseListView.height / 2
@@ -451,6 +508,7 @@ Item {
                 delegate: AnimeComponents.BooruResponse {
                     responseData: modelData
                     tagInputField: root.inputField
+                    settings: stateAdapter
                     previewDownloadPath: root.previewDownloadPath
                     downloadPath: root.downloadPath
                     nsfwPath: root.nsfwPath
@@ -473,6 +531,7 @@ Item {
                 visible: active
                 sourceComponent: AnimeComponents.BooruWelcome {
                     tagInputField: root.inputField
+                    settings: stateAdapter
                     triggerAnimationOn: GlobalStates.policiesPanelOpen
                     rotateToRight: GlobalStates.policiesOnLeft
                 }
@@ -842,9 +901,10 @@ Item {
                     buttonRadius: Appearance.rounding.full
                     colBackground: Appearance.colors.colLayer2
                     colBackgroundHover: Appearance.colors.colLayer2Hover
-                    enabled: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "searchHistory", []).length > 0
+                    enabled: (stateAdapter.searchHistory?.length ?? 0) > 0
                     onClicked: {
-                        ExtensionManager.setExtensionConfig("ii-eve-anime-booru", "searchHistory", [])
+                        stateAdapter.searchHistory = []
+                        root._saveSettings()
                     }
 
                     StyledToolTip {

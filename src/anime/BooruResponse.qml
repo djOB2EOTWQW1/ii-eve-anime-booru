@@ -13,22 +13,26 @@ Rectangle {
     id: root
     property var responseData
     property var tagInputField
+    // Settings store (JsonAdapter) threaded from Anime.qml; read-only here.
+    property var settings: null
 
     property string previewDownloadPath
     property string downloadPath
     property string nsfwPath
 
     property real availableWidth: parent.width
-    property real rowTooShortThreshold: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "rowTooShortThreshold", Config.options?.sidebar?.booru?.rowTooShortThreshold ?? 250)
+    property real rowTooShortThreshold: settings?.rowTooShortThreshold ?? Config.options?.sidebar?.booru?.rowTooShortThreshold ?? 250
     property real imageSpacing: 5
     property real responsePadding: 5
 
-    // Previews that need a curl fetch (Referer/UA) instead of a direct Image load.
+    // Providers whose previews need a curl fetch (Referer/UA headers QML Image can't
+    // send). Their previews are downloaded a page at a time in ONE `curl --parallel`
+    // process (BooruPagePrefetch, single connection pool); others load directly.
     readonly property var manualDownloadProviders: ["danbooru", "waifu.im", "t.alcy.cc", "konachan", "gelbooru"]
     readonly property bool manualDownload: manualDownloadProviders.includes(root.responseData.provider)
     // Gelbooru hotlink protection: any gelbooru.com referer works (no need for the post id).
     readonly property string previewReferer: root.responseData.provider === "gelbooru" ? "https://gelbooru.com/" : ""
-    readonly property string previewQuality: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "previewQuality", Config.options?.sidebar?.booru?.previewQuality ?? "preview")
+    readonly property string previewQuality: settings?.previewQuality ?? Config.options?.sidebar?.booru?.previewQuality ?? "preview"
     property bool previewsReady: !root.manualDownload
 
     function _previewExt(img) {
@@ -53,9 +57,19 @@ Rectangle {
         if (!root.manualDownload) return [];
         return (root.responseData.images || []).map(img => root._resolvePreview(img)).filter(e => e.url);
     }
+    // Signature of the URL set the prefetch is currently fetching / has fetched.
+    property string _prefetchKey: ""
     function startPrefetch() {
         if (!root.manualDownload) return;
+        const entries = root._buildEntries();
+        const key = entries.map(e => e.url).join("|");
+        // Idempotent: don't kill an in-flight (or already finished) fetch for the same
+        // set of URLs. That needless restart is what could blank loaded previews when
+        // the page delegate re-evaluates or settings load in.
+        if (key === root._prefetchKey && (prefetch.running || root.previewsReady)) return;
+        root._prefetchKey = key;
         root.previewsReady = false;
+        prefetch.entries = entries;
         prefetch.running = false;
         Qt.callLater(() => prefetch.running = true);
     }
@@ -64,7 +78,6 @@ Rectangle {
 
     BooruPagePrefetch {
         id: prefetch
-        entries: root._buildEntries()
         dir: root.previewDownloadPath
         referer: root.previewReferer
         onFinished: root.previewsReady = true
@@ -302,9 +315,11 @@ Rectangle {
                         imageData: modelData
                         rowHeight: imageRow.rowHeight
                         imageRadius: imageRow.modelData.images.length == 1 ? 50 : Appearance.rounding.normal
-                        // Previews are prefetched at the page level (one curl), not per image.
+                        // Manual-provider previews are fetched page-at-a-time by one
+                        // curl --parallel; the tile just shows the file once ready.
                         manualDownload: root.manualDownload
                         previewsReady: root.previewsReady
+                        settings: root.settings
                         previewDownloadPath: root.previewDownloadPath
                         downloadPath: root.downloadPath
                         nsfwPath: root.nsfwPath

@@ -1,7 +1,7 @@
 {
   "name": "Anime Booru",
   "description": "Anime/booru image browser: multi-provider tag search, previews, favorites and downloads.",
-  "version": "1.2.2",
+  "version": "1.4.1",
   "author": "djOB2EOTWQW1",
   "icon": "bookmark_heart",
   "contributes": {

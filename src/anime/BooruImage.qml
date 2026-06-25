@@ -13,6 +13,8 @@ Button {
     id: root
     property var imageData
     property var rowHeight
+    // Settings store (JsonAdapter) threaded from Anime.qml; read-only here.
+    property var settings: null
     property bool manualDownload: false
     property string previewDownloadPath
     property string downloadPath
@@ -30,7 +32,7 @@ Button {
     property bool isPlayable: ["mp4", "webm", "m4v", "mov", "gif"].includes(root.fileExt)
     // Real videos can't render as a static Image, so always thumbnail them regardless of quality
     readonly property bool isStaticVideo: ["mp4", "webm", "m4v", "mov"].includes(root.fileExt)
-    readonly property string previewQuality: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "previewQuality", Config.options?.sidebar?.booru?.previewQuality ?? "preview")
+    readonly property string previewQuality: settings?.previewQuality ?? Config.options?.sidebar?.booru?.previewQuality ?? "preview"
     readonly property string resolvedPreviewUrl: {
         if (root.isStaticVideo)
             return imageData.preview_url ?? imageData.sample_url ?? imageData.file_url
@@ -45,8 +47,16 @@ Button {
         return decodeURIComponent(url.substring(url.lastIndexOf('/') + 1))
     }
     property string filePath: `${root.previewDownloadPath}/${root.previewCacheName}`
-    // Set by the parent response once its page-level prefetch has finished.
-    property bool previewsReady: false
+
+    // Manual-provider previews are downloaded a page at a time by BooruPagePrefetch
+    // (one `curl --parallel` with referer). To stay responsive the tile does NOT wait
+    // for the whole page: it polls for ITS OWN file and shows it the moment that file
+    // lands (progressive), so one slow/stalled sibling can't blank the rest.
+    property bool previewsReady: false      // page prefetch finished (from parent)
+    property int _retries: 0
+    readonly property int _maxRetries: 80   // poll ceiling (~80 × 500ms)
+    property string _displaySource: ""      // imperatively driven for manual providers
+
     property bool nativePlaying: false
     property int maxTagStringLineLength: 50
     property real imageRadius: Appearance.rounding.small
@@ -54,6 +64,29 @@ Button {
 
     property bool showActions: false
     property bool showTags: false
+
+    // Re-point the Image at our cache file (toggle through "" so Qt re-reads from disk
+    // even if the path is unchanged). Used to poll for the page-curl's output.
+    function _reloadPreview() {
+        root._displaySource = ""
+        Qt.callLater(() => { root._displaySource = root.filePath })
+    }
+    Component.onCompleted: if (root.manualDownload) root._reloadPreview()
+    onFilePathChanged: if (root.manualDownload) { root._retries = 0; root._reloadPreview() }
+    // Prefetch finished → one final attempt for files that landed right at the end.
+    onPreviewsReadyChanged: if (root.manualDownload && root.previewsReady) root._reloadPreview()
+
+    Timer { // Poll for this tile's file while the page prefetch is still downloading.
+        id: filePoll
+        interval: 500
+        repeat: true
+        onTriggered: {
+            if (imageObject.status === Image.Ready) { stop(); return }
+            if (root.previewsReady) { stop(); return }   // prefetch done; file won't appear
+            if (root._retries++ >= root._maxRetries) { stop(); return }
+            root._reloadPreview()
+        }
+    }
 
     padding: 0
     implicitWidth: root.rowHeight * modelData.aspect_ratio
@@ -75,7 +108,20 @@ Button {
             width: root.rowHeight * modelData.aspect_ratio
             height: root.rowHeight
             fillMode: Image.PreserveAspectFit
-            source: root.manualDownload ? (root.previewsReady ? root.filePath : "") : root.resolvedPreviewUrl
+            // Manual providers: poll-driven local file (_displaySource). Others: the
+            // remote URL directly.
+            source: root.manualDownload ? root._displaySource : root.resolvedPreviewUrl
+            onStatusChanged: {
+                if (!root.manualDownload) return
+                if (status === Image.Ready) { filePoll.stop(); return }
+                if (status === Image.Error) {
+                    // prefetch done & still no file → give up (blank). Otherwise the
+                    // file isn't written yet → keep polling until it lands.
+                    if (!root.previewsReady && !filePoll.running && root._retries < root._maxRetries) {
+                        filePoll.start()
+                    }
+                }
+            }
 
             layer.enabled: true
             layer.effect: OpacityMask {
@@ -85,6 +131,18 @@ Button {
                     radius: imageRadius
                 }
             }
+        }
+
+        MaterialLoadingIndicator { // Preview loading spinner
+            anchors.centerIn: parent
+            // Needs an explicit size — defaults to 0 (invisible) otherwise.
+            implicitSize: Math.round(Math.max(20, Math.min(48, root.rowHeight * 0.35)))
+            // Spinner while this tile is still waiting for its file (manual, not yet
+            // loaded and prefetch not done) or while the Image is loading. Once the
+            // tile loads it disappears independently — progressive, not all-or-nothing.
+            visible: (root.manualDownload && imageObject.status !== Image.Ready && !root.previewsReady)
+                     || imageObject.status === Image.Loading
+            loading: visible
         }
 
         Rectangle { // Hover scrim
@@ -143,7 +201,7 @@ Button {
                 visible: root.isPlayable
                 onClicked: {
                     // gelbooru needs a Referer header the native player can't send → force mpv
-                    const useNative = ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "player", Config.options?.sidebar?.booru?.player ?? "mpv") === "native"
+                    const useNative = (root.settings?.player ?? Config.options?.sidebar?.booru?.player ?? "mpv") === "native"
                         && !root.imageData.file_url.includes("gelbooru.com")
                     if (useNative) {
                         root.nativePlaying = true

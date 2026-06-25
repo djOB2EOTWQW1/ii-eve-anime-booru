@@ -13,6 +13,8 @@ import Quickshell
 Item {
     id: root
     property var tagInputField
+    // Settings store (JsonAdapter) threaded from Anime.qml; read-only here.
+    property var settings: null
 
     // Opening animation (mirrors PlaceholderOpeningAnimation, adapted to the hero shape)
     property bool triggerAnimationOn: false
@@ -44,7 +46,7 @@ Item {
         }
     }
 
-    readonly property var recent: ExtensionManager.getExtensionConfig("ii-eve-anime-booru", "searchHistory", [])
+    readonly property var recent: root.settings?.searchHistory ?? []
 
     ColumnLayout {
         anchors {
